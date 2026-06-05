@@ -56,7 +56,8 @@ export function Dashboard({
       .filter(
         (s) =>
           !earlyOnly ||
-          (s.stage !== "Extended" && s.stage !== "Late · already ran")
+          (s.stage !== "Running ahead" &&
+            s.stage !== "Price ahead of fundamentals")
       )
       .filter(
         (s) =>
@@ -116,33 +117,31 @@ export function Dashboard({
               </li>
               <li>
                 <strong>Revenue growth (20%)</strong> &amp;{" "}
-                <strong>acceleration (12%)</strong> — high and{" "}
+                <strong>acceleration (14%)</strong> — high and{" "}
                 <em>speeding-up</em> growth.
               </li>
               <li>
-                <strong>Valuation vs growth (16%)</strong> — growth not yet
+                <strong>Valuation vs growth (18%)</strong> — growth not yet
                 priced to perfection.
               </li>
               <li>
-                <strong>Under the radar (12%)</strong> — lightly-covered gems;
+                <strong>Under the radar (14%)</strong> — lightly-covered gems;
                 crowded consensus names are penalized.
               </li>
               <li>
-                <strong>Momentum stage (10%)</strong> — a healthy early uptrend
-                scores best; parabolic moves are flagged as &quot;you&apos;re
-                late&quot;.
-              </li>
-              <li>
-                <strong>Margin quality (4%)</strong>.
+                <strong>Margin quality (8%)</strong> — scalable gross margins.
               </li>
             </ul>
             <p className="border-t border-white/10 pt-2">
-              On top of that, a <strong>late-stage discount</strong> cuts the
-              score of names that have already run hard (e.g. up 300%+): most of
-              the move has likely happened, so they&apos;re no longer{" "}
-              <em>future</em> breakouts. Each card shows a{" "}
-              <strong>Stage</strong> badge — use{" "}
-              <em>🚀 Early-stage only</em> to hide the ones that already ran.
+              Then a <strong>price-vs-fundamentals discount</strong> is applied:
+              it compares how far the <em>price</em> has run against how much the{" "}
+              <em>business</em> actually grew. A big mover whose earnings grew
+              just as fast keeps its score; one whose price ran far ahead of the
+              fundamentals is discounted as &quot;late&quot;. Each card&apos;s{" "}
+              <strong>Stage</strong> badge (price lagging / in step / running
+              ahead / ahead of fundamentals) shows where it sits — use{" "}
+              <em>🚀 Early-stage only</em> to hide names whose price already ran
+              ahead.
             </p>
           </div>
         )}

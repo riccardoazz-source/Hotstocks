@@ -35,13 +35,12 @@ export async function getStocks(): Promise<{
       }
       return { stocks, source: "fmp" };
     } catch (err) {
-      return {
-        stocks: MOCK_STOCKS,
-        source: "mock",
-        notice: `FMP request failed (${
-          err instanceof Error ? err.message : "unknown error"
-        }) — falling back to demo data.`,
-      };
+      const msg = err instanceof Error ? err.message : "unknown error";
+      // 429 = daily rate limit hit. Give a clear, reassuring message.
+      const notice = msg.includes("429")
+        ? "FMP daily rate limit reached — showing demo data. Live data resumes automatically once the free-tier quota resets (daily, ~midnight UTC)."
+        : `FMP request failed (${msg}) — falling back to demo data.`;
+      return { stocks: MOCK_STOCKS, source: "mock", notice };
     }
   }
 

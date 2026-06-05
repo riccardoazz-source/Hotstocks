@@ -10,20 +10,21 @@ import type {
 /**
  * Forward-looking scoring engine.
  *
- * The goal is to surface stocks that could *become* breakouts from here — not
- * the ones that already ran. So the model deliberately:
- *   - rewards small/mid caps (room to multiply) and penalizes mega caps;
- *   - rewards accelerating growth (a leading indicator), not just past growth;
- *   - rewards under-covered "undiscovered" names and penalizes crowded consensus;
- *   - treats price momentum as "Goldilocks": a healthy early uptrend is good,
- *     a parabolic +200% run is a red flag ("you're late"), a crash is bad.
+ * Goal: surface stocks that could *become* breakouts from here — not the ones
+ * that already ran. The model rewards small/mid caps (room to multiply),
+ * accelerating growth, reasonable valuation and under-covered names.
+ *
+ * Crucially, it does NOT blindly penalize price momentum. A stock can be up a
+ * lot and still be early if the BUSINESS grew even more. So instead of a pure
+ * price penalty, the final score is discounted by how far price has run *ahead
+ * of fundamentals* — the "price vs fundamentals gap". Price lagging the
+ * business = cheap/early; price far ahead = speculative/late.
  */
 
 function clamp(v: number, min = 0, max = 100): number {
   return Math.min(max, Math.max(min, v));
 }
 
-/** Linear-scale a raw value from [lo, hi] onto a 0-100 score (clamped). */
 function scale(value: number, lo: number, hi: number): number {
   if (hi === lo) return 0;
   return clamp(((value - lo) / (hi - lo)) * 100);
@@ -37,38 +38,20 @@ function billions(marketCap: number): number {
   return marketCap / 1e9;
 }
 
-/** Weights for the final Breakout score. Sum = 1. */
-const WEIGHTS: Record<FactorKey, number> = {
+/** Weights for the raw (pre-discount) Breakout score. Sum = 1. */
+const WEIGHTS: Record<Exclude<FactorKey, "momentum">, number> = {
   roomToRun: 0.26,
   growth: 0.2,
-  acceleration: 0.12,
-  valuation: 0.16,
-  underRadar: 0.12,
-  momentum: 0.1,
-  quality: 0.04,
+  acceleration: 0.14,
+  valuation: 0.18,
+  underRadar: 0.14,
+  quality: 0.08,
 };
 
 /** Smaller cap => more room to multiply. ~$1B ≈ 100, ~$3T ≈ 0. */
 function roomToRunScore(marketCap: number): number {
   const logCap = Math.log10(Math.max(marketCap, 1e8));
   return clamp(100 - ((logCap - 9) / (12.5 - 9)) * 100);
-}
-
-/**
- * "Goldilocks" momentum: best for a healthy emerging uptrend; penalizes both
- * falling knives and parabolic moves where most of the gain already happened.
- */
-function momentumScore(change1Y: number, change3M: number): number {
-  let base: number;
-  if (change1Y <= -40) base = 8;
-  else if (change1Y <= 0) base = 8 + ((change1Y + 40) / 40) * 47; // -> 55
-  else if (change1Y <= 50) base = 55 + (change1Y / 50) * 45; // -> 100 (sweet spot)
-  else if (change1Y <= 120) base = 100 - ((change1Y - 50) / 70) * 30; // -> 70
-  else if (change1Y <= 250) base = 70 - ((change1Y - 120) / 130) * 45; // -> 25
-  else base = 18; // very parabolic: you're late
-  // small freshness nudge from recent 3M action
-  const fresh = scale(change3M, -20, 30) - 50; // -50..+50
-  return clamp(base + fresh * 0.12);
 }
 
 /** Valuation relative to growth (PEG-like): cheap growth scores high. */
@@ -79,17 +62,17 @@ function valuationScore(s: Stock): number {
 }
 
 /**
- * Under-the-radar: undiscovered names (light analyst coverage) with upside
- * score best; heavily-covered consensus names (40+ analysts) are penalized.
+ * Under-the-radar: lightly-covered names with upside score best; heavily
+ * covered consensus names (40+ analysts) are penalized.
  */
 function underRadarScore(s: Stock): { score: number; total: number } {
   const total = s.analystBuy + s.analystHold + s.analystSell;
   let coverage: number;
-  if (total < 3) coverage = 45; // too obscure / illiquid risk
+  if (total < 3) coverage = 45;
   else if (total <= 15) coverage = 100;
-  else if (total <= 25) coverage = 100 - ((total - 15) / 10) * 30; // ->70
-  else if (total <= 40) coverage = 70 - ((total - 25) / 15) * 35; // ->35
-  else coverage = 28; // crowded consensus
+  else if (total <= 25) coverage = 100 - ((total - 15) / 10) * 30;
+  else if (total <= 40) coverage = 70 - ((total - 25) / 15) * 35;
+  else coverage = 28;
   const upside = scale(s.priceTargetUpside, -10, 60);
   return { score: clamp(0.55 * coverage + 0.45 * upside), total };
 }
@@ -103,7 +86,6 @@ function buildFactors(s: Stock): { factors: FactorBreakdown[]; total: number } {
   const acceleration = scale(s.revenueAcceleration, -10, 30);
   const valuation = valuationScore(s);
   const { score: underRadar, total } = underRadarScore(s);
-  const momentum = momentumScore(s.priceChange1Y, s.priceChange3M);
   const quality = scale(s.grossMargin, 20, 80);
 
   const capB = r1(billions(s.marketCap));
@@ -159,24 +141,8 @@ function buildFactors(s: Stock): { factors: FactorBreakdown[]; total: number } {
       weight: WEIGHTS.underRadar,
       reason:
         total <= 20
-          ? `Lightly covered (${total} analysts), ${
-              s.priceTargetUpside >= 0 ? "+" : ""
-            }${r1(s.priceTargetUpside)}% target upside — room to be discovered`
+          ? `Lightly covered (${total} analysts) — room to be discovered`
           : `Heavily covered (${total} analysts) — already a consensus name`,
-    },
-    {
-      key: "momentum",
-      label: "Momentum stage",
-      score: r1(momentum),
-      weight: WEIGHTS.momentum,
-      reason:
-        s.priceChange1Y > 150
-          ? `Up ${r1(s.priceChange1Y)}% in 1Y — much of the move may be done`
-          : s.priceChange1Y < -25
-          ? `Down ${r1(Math.abs(s.priceChange1Y))}% in 1Y — no uptrend yet`
-          : `Healthy ${s.priceChange1Y >= 0 ? "up" : "down"}trend (${
-              s.priceChange1Y >= 0 ? "+" : ""
-            }${r1(s.priceChange1Y)}% 1Y)`,
     },
     {
       key: "quality",
@@ -190,21 +156,54 @@ function buildFactors(s: Stock): { factors: FactorBreakdown[]; total: number } {
   return { factors, total };
 }
 
+/** The trailing run-up: the larger of 1Y and YTD price change. */
+function runUpOf(s: Stock): number {
+  return Math.max(s.priceChange1Y, s.priceChangeYTD ?? s.priceChange1Y);
+}
+
+/** How much the business itself grew recently (revenue + part of earnings). */
+function fundamentalProgress(s: Stock): number {
+  return (
+    Math.max(s.revenueGrowthYoY, 0) + 0.5 * clamp(s.earningsGrowthYoY, 0, 200)
+  );
+}
+
+/**
+ * Discount applied when price has outrun the business. Driven by the gap
+ * (price run-up minus fundamental growth), NOT by price alone — so a strong
+ * mover whose fundamentals grew just as fast keeps most of its score.
+ */
+function gapDiscount(gap: number): number {
+  if (gap <= 40) return 1.0;
+  if (gap <= 120) return 1.0 - ((gap - 40) / 80) * 0.15; // -> 0.85
+  if (gap <= 300) return 0.85 - ((gap - 120) / 180) * 0.25; // -> 0.60
+  if (gap <= 600) return 0.6 - ((gap - 300) / 300) * 0.15; // -> 0.45
+  return 0.45;
+}
+
+function stageOf(s: Stock, gap: number): Stage {
+  const runUp = runUpOf(s);
+  const fund = fundamentalProgress(s);
+  if (s.revenueGrowthYoY < 5 && runUp < 10) return "Pre-breakout";
+  if (gap < -20 && fund > 15) return "Price lagging growth";
+  if (gap <= 40) return "In step with growth";
+  if (gap <= 150) return "Running ahead";
+  return "Price ahead of fundamentals";
+}
+
 function estimateTimeframe(
   accelScore: number,
-  momentum: number,
+  change3M: number,
   upside: number
 ): Timeframe {
+  const momentum = scale(change3M, -20, 40);
   const urgency = 0.4 * accelScore + 0.3 * momentum + 0.3 * scale(upside, 0, 60);
   if (urgency >= 62) return "0–3 months";
   if (urgency >= 40) return "3–9 months";
   return "9–24 months";
 }
 
-function estimateConfidence(
-  total: number,
-  factors: FactorBreakdown[]
-): number {
+function estimateConfidence(total: number, factors: FactorBreakdown[]): number {
   const coverage = scale(total, 3, 30);
   const scores = factors.map((f) => f.score);
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
@@ -214,67 +213,40 @@ function estimateConfidence(
   return r1(clamp(0.45 * coverage + 0.55 * consistency));
 }
 
-function buildThesis(s: Stock, factors: FactorBreakdown[]): string {
+function buildThesis(s: Stock, stage: Stage): string {
   const capB = r1(billions(s.marketCap));
-  const size = s.marketCap < 1e10 ? "small-cap" : s.marketCap < 5e10 ? "mid-cap" : "large-cap";
-  const accel =
-    s.revenueAcceleration >= 2 ? " and accelerating" : "";
-  const cover =
-    s.analystBuy + s.analystHold + s.analystSell <= 18
-      ? ", still under-covered"
-      : "";
+  const size =
+    s.marketCap < 1e10 ? "small-cap" : s.marketCap < 5e10 ? "mid-cap" : "large-cap";
+  const accel = s.revenueAcceleration >= 2 ? " and accelerating" : "";
+  const stageNote =
+    stage === "Price lagging growth"
+      ? "price still lags the fundamentals — room to catch up"
+      : stage === "In step with growth"
+      ? "price tracking the fundamentals"
+      : stage === "Running ahead"
+      ? "price running ahead of the business — be selective"
+      : stage === "Price ahead of fundamentals"
+      ? "price has outrun the business — likely late"
+      : "no clear trend yet";
   return `${size} ($${capB}B) growing revenue ${
     s.revenueGrowthYoY >= 0 ? "+" : ""
-  }${r1(s.revenueGrowthYoY)}%${accel}${cover} — ${
-    factors.find((f) => f.key === "valuation")!.score > 50
-      ? "priced with room to re-rate"
-      : "the question is whether growth justifies the valuation"
-  }.`;
+  }${r1(s.revenueGrowthYoY)}%${accel}; ${stageNote}.`;
 }
 
-function buildCaveat(s: Stock): string {
-  const runUp = runUpOf(s);
-  if (runUp > 250)
-    return `Already up ~${Math.round(
-      runUp
-    )}% — most of the re-rating has likely happened; chasing it is risky.`;
-  if (runUp > 120)
-    return "Already up sharply — entry timing and pullback risk matter.";
+function buildCaveat(s: Stock, gap: number): string {
+  if (gap > 300)
+    return `Price has run ~${Math.round(
+      gap
+    )}pp ahead of fundamental growth — speculative; chasing it is risky.`;
+  if (gap > 120)
+    return "Price is running ahead of the business — mind entry timing.";
   if (s.marketCap > 2e11)
     return "Mega-cap: a true multi-bagger from here is mathematically unlikely.";
-  if (s.psRatio / Math.max(s.revenueGrowthYoY, 1) > 0.45)
-    return "Rich valuation leaves little margin for execution slips.";
   if (s.peRatio === null)
     return "Not yet profitable — depends on the growth story playing out.";
   if (s.revenueAcceleration <= -3)
     return "Growth is decelerating — watch for a further slowdown.";
   return "Smaller, higher-volatility name — size positions accordingly.";
-}
-
-/** The trailing run-up we judge "lateness" on: the larger of 1Y and YTD. */
-function runUpOf(s: Stock): number {
-  return Math.max(s.priceChange1Y, s.priceChangeYTD ?? s.priceChange1Y);
-}
-
-/**
- * "You're late" discount. The more a stock has ALREADY run, the more its
- * forward score is cut — because most of the re-rating has likely happened.
- * This is the core of the app's purpose: find names BEFORE the move.
- */
-function latenessMultiplier(runUp: number): number {
-  if (runUp <= 50) return 1.0;
-  if (runUp <= 120) return 1.0 - ((runUp - 50) / 70) * 0.15; // -> 0.85
-  if (runUp <= 250) return 0.85 - ((runUp - 120) / 130) * 0.23; // -> 0.62
-  if (runUp <= 450) return 0.62 - ((runUp - 250) / 200) * 0.17; // -> 0.45
-  return 0.4; // very extended: the boom likely already happened
-}
-
-function stageOf(runUp: number): Stage {
-  if (runUp < 0) return "Pre-breakout";
-  if (runUp <= 50) return "Early uptrend";
-  if (runUp <= 120) return "Mid-trend";
-  if (runUp <= 250) return "Extended";
-  return "Late · already ran";
 }
 
 /** Score a single stock. */
@@ -285,13 +257,14 @@ export function scoreStock(s: Stock): ScoredStock {
   const rawScore = factors.reduce((sum, f) => sum + f.score * f.weight, 0);
 
   const runUp = runUpOf(s);
-  const lateness = latenessMultiplier(runUp);
-  const stage = stageOf(runUp);
+  const fundamentalsGap = r1(runUp - fundamentalProgress(s));
+  const lateness = gapDiscount(fundamentalsGap);
+  const stage = stageOf(s, fundamentalsGap);
   const breakoutScore = r1(rawScore * lateness);
 
   const timeframe = estimateTimeframe(
     byKey.acceleration.score,
-    byKey.momentum.score,
+    s.priceChange3M,
     s.priceTargetUpside
   );
   const confidence = estimateConfidence(total, factors);
@@ -307,16 +280,19 @@ export function scoreStock(s: Stock): ScoredStock {
     stage,
     latenessMultiplier: lateness,
     runUp,
+    fundamentalsGap,
     timeframe,
     confidence,
     factors,
     topReasons,
-    thesis: buildThesis(s, factors),
-    caveat: buildCaveat(s),
+    thesis: buildThesis(s, stage),
+    caveat: buildCaveat(s, fundamentalsGap),
   };
 }
 
 /** Score and sort a list of stocks by Breakout score (desc). */
 export function scoreAll(stocks: Stock[]): ScoredStock[] {
-  return stocks.map(scoreStock).sort((a, b) => b.breakoutScore - a.breakoutScore);
+  return stocks
+    .map(scoreStock)
+    .sort((a, b) => b.breakoutScore - a.breakoutScore);
 }

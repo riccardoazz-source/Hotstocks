@@ -28,20 +28,32 @@ opposite. See `lib/scoring.ts`.
 | --- | --- | --- |
 | **Room to run** | 26% | Small/mid caps that can still multiply; mega-caps penalized (a $3T name can't 10x) |
 | **Revenue growth** | 20% | High revenue (and earnings) growth |
-| **Growth acceleration** | 12% | Growth that is *speeding up* year over year — a leading indicator |
-| **Valuation vs growth** | 16% | Growth not yet priced to perfection (PEG-like) |
-| **Under the radar** | 12% | Lightly-covered names with upside; crowded consensus (40+ analysts) penalized |
-| **Momentum stage** | 10% | A healthy *early* uptrend; parabolic +200% runs flagged as "you're late", crashes penalized |
-| **Margin quality** | 4% | Scalable gross margins |
+| **Growth acceleration** | 14% | Growth that is *speeding up* year over year — a leading indicator |
+| **Valuation vs growth** | 18% | Growth not yet priced to perfection (PEG-like) |
+| **Under the radar** | 14% | Lightly-covered names; crowded consensus (40+ analysts) penalized |
+| **Margin quality** | 8% | Scalable gross margins |
 
-`timeframe` is derived from acceleration + momentum stage + analyst upside;
-`confidence` from analyst coverage and how consistent the signals are. All
-weights and thresholds live in `lib/scoring.ts` — tune them freely.
+**Then the key step — the price-vs-fundamentals discount.** Rather than
+penalizing price momentum outright (a strong mover can still have room), the raw
+score is multiplied by a discount based on the **gap between how far the price
+ran and how much the business actually grew**:
 
-> **Why this matters:** under this model the famous mega-caps (NVDA, AMD, TSM…)
-> rank near the *bottom* — they're great companies that have largely already
-> re-rated. The top of the list is small/mid-cap, under-covered, accelerating
-> growth — i.e. the profile of a *future* breakout, not a past one.
+- Price up 150% but earnings up 300% → price *lags* the business → **no
+  discount**, it's still early (even though it already moved a lot).
+- Price up 565% but revenue up 40% → price ran far *ahead* of the business →
+  **heavy discount**, likely late.
+
+Each stock gets a **Stage** label from this gap — *Price lagging growth → In
+step → Running ahead → Price ahead of fundamentals* — surfaced on every card,
+with a `🚀 Early-stage only` filter. `timeframe` comes from acceleration +
+recent momentum; `confidence` from coverage and signal consistency. All weights
+and thresholds live in `lib/scoring.ts`.
+
+> **Why this matters:** this distinguishes *momentum with real fuel* (price
+> tracking or lagging fundamentals) from *momentum already spent* (price far
+> ahead of fundamentals). A famous mega-cap whose price merely kept pace with
+> its earnings isn't punished for momentum — it ranks low because of its size
+> (limited room to multiply), which is the honest reason.
 
 ## Run locally
 

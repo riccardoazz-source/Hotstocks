@@ -15,7 +15,9 @@ import type { Stock } from "../types";
  */
 
 const BASE = "https://financialmodelingprep.com/stable";
-const CACHE_SECONDS = 60 * 60 * 6; // 6h: keeps daily request count low
+// 12h cache + a trimmed watchlist + 5 calls/symbol keeps us under the free
+// tier's ~250 requests/day budget (≈ 15 × 5 = 75 calls per refresh, ≤2/day).
+const CACHE_SECONDS = 60 * 60 * 12;
 
 /**
  * Curated universe to score, with a display sector so we don't spend an API
@@ -28,32 +30,21 @@ const CACHE_SECONDS = 60 * 60 * 6; // 6h: keeps daily request count low
  */
 const WATCHLIST: { symbol: string; sector: string }[] = [
   // Small / mid-cap growth candidates (the real hunting ground)
-  { symbol: "SNDK", sector: "Semiconductors" },
   { symbol: "CRDO", sector: "Semiconductors" },
   { symbol: "ALAB", sector: "Semiconductors" },
   { symbol: "ONTO", sector: "Semiconductor Equipment" },
-  { symbol: "CLS", sector: "Electronics Manufacturing" },
-  { symbol: "VRT", sector: "Datacenter Infrastructure" },
   { symbol: "NBIS", sector: "Cloud Infrastructure" },
   { symbol: "RKLB", sector: "Aerospace" },
   { symbol: "RXRX", sector: "Biotech / AI" },
   { symbol: "TMDX", sector: "Medical Devices" },
   { symbol: "HIMS", sector: "Health Tech" },
-  { symbol: "AS", sector: "Consumer Brands" },
   { symbol: "CAVA", sector: "Restaurants" },
   { symbol: "DUOL", sector: "Software" },
-  { symbol: "IOT", sector: "Software" },
-  { symbol: "NET", sector: "Software" },
   { symbol: "TOST", sector: "Fintech" },
-  { symbol: "AFRM", sector: "Fintech" },
   { symbol: "NXT", sector: "Clean Energy" },
-  { symbol: "FLNC", sector: "Clean Energy" },
   { symbol: "POWL", sector: "Industrials" },
-  { symbol: "SMCI", sector: "Datacenter Hardware" },
   // Mega-cap "control" group — should rank low under the model
   { symbol: "NVDA", sector: "Semiconductors" },
-  { symbol: "AMD", sector: "Semiconductors" },
-  { symbol: "TSM", sector: "Semiconductors" },
   { symbol: "PLTR", sector: "Software" },
 ];
 
@@ -108,13 +99,14 @@ function estimateRsi(change3M: number): number {
 async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
   const q = `symbol=${symbol}&${key}`;
 
-  const [quote, changeRes, ratios, growth, target, grades] = await Promise.all([
+  // 5 calls per symbol. (price-target-consensus dropped to conserve quota; the
+  // model degrades gracefully without analyst price targets.)
+  const [quote, changeRes, ratios, growth, grades] = await Promise.all([
     tryJson<unknown>(`${BASE}/quote?${q}`),
     tryJson<unknown>(`${BASE}/stock-price-change?${q}`),
     tryJson<unknown>(`${BASE}/ratios-ttm?${q}`),
     // limit=2 so we can compute growth ACCELERATION (this year vs last year)
     tryJson<unknown>(`${BASE}/income-statement-growth?${q}&limit=2`),
-    tryJson<unknown>(`${BASE}/price-target-consensus?${q}`),
     tryJson<unknown>(`${BASE}/grades-consensus?${q}`),
   ]);
 
@@ -136,7 +128,6 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
       ? (num(growthRows[0].growthRevenue) - num(growthRows[1].growthRevenue)) *
         100
       : 0;
-  const targetRow = firstOf<{ targetConsensus?: number }>(target);
   const gradesRow = firstOf<{
     strongBuy?: number;
     buy?: number;
@@ -146,9 +137,8 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
   }>(grades);
 
   const price = num(quoteRow.price);
-  const targetConsensus = num(targetRow?.targetConsensus, price);
-  const priceTargetUpside =
-    price > 0 ? ((targetConsensus - price) / price) * 100 : 0;
+  // We no longer fetch price targets (quota); leave upside neutral.
+  const priceTargetUpside = 0;
 
   const hasGrades =
     gradesRow &&

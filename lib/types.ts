@@ -73,15 +73,17 @@ export interface FactorBreakdown {
 export type Timeframe = "0–3 months" | "3–9 months" | "9–24 months";
 
 /**
- * Where a stock is in its move. The whole app is about finding names BEFORE the
- * run, so this is surfaced prominently and heavily discounts late-stage names.
+ * Where a stock is relative to its own fundamentals. The app is about finding
+ * names whose price has NOT yet outrun the business — so this compares price
+ * run-up against actual fundamental growth, not price alone. A name can be up a
+ * lot and still be "early" if earnings grew even more.
  */
 export type Stage =
   | "Pre-breakout"
-  | "Early uptrend"
-  | "Mid-trend"
-  | "Extended"
-  | "Late · already ran";
+  | "Price lagging growth"
+  | "In step with growth"
+  | "Running ahead"
+  | "Price ahead of fundamentals";
 
 /** A stock enriched with computed scores and explanations. */
 export interface ScoredStock extends Stock {
@@ -90,15 +92,20 @@ export interface ScoredStock extends Stock {
    * to *become* a breakout from here (not how much it already ran).
    */
   breakoutScore: number;
-  /** How far into its move it already is. */
+  /** Where price sits relative to fundamental growth. */
   stage: Stage;
   /**
-   * Multiplier (0-1) applied to the raw score because the stock already ran.
-   * 1 = no discount; 0.4 = a 60% "you're late" discount.
+   * Multiplier (0-1) applied to the raw score when price has outrun the
+   * business. 1 = price justified by fundamentals; 0.45 = price far ahead.
    */
   latenessMultiplier: number;
-  /** The trailing run-up (max of 1Y / YTD) the discount is based on, percent. */
+  /** The trailing run-up (max of 1Y / YTD), percent. */
   runUp: number;
+  /**
+   * Price run-up minus fundamental growth, in percentage points. Positive =
+   * price ahead of the business (riskier); negative = price still lagging.
+   */
+  fundamentalsGap: number;
   /** Estimated window in which a re-rating could play out. */
   timeframe: Timeframe;
   /** Confidence in the timeframe/thesis, 0-100. */

@@ -14,10 +14,12 @@ const TIMEFRAME_STYLES: Record<string, string> = {
 
 const STAGE_STYLES: Record<string, string> = {
   "Pre-breakout": "bg-violet-500/15 text-violet-300 border-violet-500/30",
-  "Early uptrend": "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  "Mid-trend": "bg-lime-500/15 text-lime-300 border-lime-500/30",
-  Extended: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  "Late · already ran": "bg-rose-500/20 text-rose-300 border-rose-500/40",
+  "Price lagging growth":
+    "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  "In step with growth": "bg-lime-500/15 text-lime-300 border-lime-500/30",
+  "Running ahead": "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  "Price ahead of fundamentals":
+    "bg-rose-500/20 text-rose-300 border-rose-500/40",
 };
 
 export function StockCard({
@@ -150,7 +152,8 @@ export function StockCard({
           {stock.latenessMultiplier < 0.99 && (
             <div className="mb-3 flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-200/80">
               <span>
-                Late-stage discount (already up {stock.runUp.toFixed(0)}%)
+                Price ahead of fundamentals by ~{stock.fundamentalsGap.toFixed(0)}
+                pp
               </span>
               <span className="font-semibold tabular-nums">
                 −{Math.round((1 - stock.latenessMultiplier) * 100)}% to score
