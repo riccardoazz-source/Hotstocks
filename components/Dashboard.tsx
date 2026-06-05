@@ -112,20 +112,25 @@ export function Dashboard({
             </p>
             <ul className="ml-4 list-disc space-y-1 text-white/55">
               <li>
-                <strong>Room to run (26%)</strong> — small/mid caps can multiply;
+                <strong>Room to run (22%)</strong> — small/mid caps can multiply;
                 mega-caps are penalized (a $3T name can&apos;t 10x).
               </li>
               <li>
-                <strong>Revenue growth (20%)</strong> &amp;{" "}
-                <strong>acceleration (14%)</strong> — high and{" "}
+                <strong>Forward outlook (18%)</strong> — next-year estimates,
+                estimate revisions and earnings-surprise streak (leading
+                indicators).
+              </li>
+              <li>
+                <strong>Revenue growth (14%)</strong> &amp;{" "}
+                <strong>acceleration (12%)</strong> — high and{" "}
                 <em>speeding-up</em> growth.
               </li>
               <li>
-                <strong>Valuation vs growth (18%)</strong> — growth not yet
+                <strong>Valuation vs growth (16%)</strong> — growth not yet
                 priced to perfection.
               </li>
               <li>
-                <strong>Under the radar (14%)</strong> — lightly-covered gems;
+                <strong>Under the radar (10%)</strong> — lightly-covered gems;
                 crowded consensus names are penalized.
               </li>
               <li>

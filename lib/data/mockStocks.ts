@@ -8,7 +8,7 @@ import type { Stock } from "../types";
  * `revenueAcceleration` = change in the annual revenue-growth rate vs the prior
  * year, in percentage points (positive = speeding up).
  */
-export const MOCK_STOCKS: Stock[] = [
+const RAW: Stock[] = [
   {
     symbol: "NVDA",
     name: "NVIDIA Corporation",
@@ -514,3 +514,23 @@ export const MOCK_STOCKS: Stock[] = [
     catalysts: ["AI GPU cloud buildout", "Hyperscaler contracts"],
   },
 ];
+
+/**
+ * Demo forward signals, derived illustratively from the trailing figures (real
+ * forward data comes from FMP in production). Lets the "Forward outlook" factor
+ * show meaningful variation without hand-editing every entry.
+ */
+function withForward(s: Stock): Stock {
+  return {
+    ...s,
+    forwardRevenueGrowth: Math.round(
+      Math.max(0, s.revenueGrowthYoY * 0.65 + s.revenueAcceleration * 0.15)
+    ),
+    estimateRevisionTrend:
+      s.revenueAcceleration > 5 ? 1 : s.revenueAcceleration < -5 ? -1 : 0,
+    earningsSurpriseStreak:
+      s.earningsGrowthYoY > 50 ? 4 : s.earningsGrowthYoY > 0 ? 3 : 1,
+  };
+}
+
+export const MOCK_STOCKS: Stock[] = RAW.map(withForward);

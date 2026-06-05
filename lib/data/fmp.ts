@@ -96,11 +96,19 @@ function estimateRsi(change3M: number): number {
   return Math.min(85, Math.max(20, 50 + change3M * 0.4));
 }
 
-async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
+interface FetchOpts {
+  sector?: string;
+  forward: boolean;
+}
+
+async function fetchOne(
+  symbol: string,
+  key: string,
+  opts: FetchOpts
+): Promise<Stock | null> {
   const q = `symbol=${symbol}&${key}`;
 
-  // 5 calls per symbol. (price-target-consensus dropped to conserve quota; the
-  // model degrades gracefully without analyst price targets.)
+  // 5 core calls per symbol. (price-target-consensus dropped to conserve quota.)
   const [quote, changeRes, ratios, growth, grades] = await Promise.all([
     tryJson<unknown>(`${BASE}/quote?${q}`),
     tryJson<unknown>(`${BASE}/stock-price-change?${q}`),
@@ -159,10 +167,43 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
   const change1Y = num(change["1Y"]);
   const changeYTD = num(change["ytd"]);
 
+  // Optional forward-looking signals (2 extra calls; off by default for quota).
+  let forwardRevenueGrowth: number | undefined;
+  let earningsSurpriseStreak: number | undefined;
+  if (opts.forward) {
+    const [estimates, surprises] = await Promise.all([
+      tryJson<unknown>(`${BASE}/analyst-estimates?${q}&period=annual&limit=2`),
+      tryJson<unknown>(`${BASE}/earnings-surprises?${q}&limit=4`),
+    ]);
+    const estRows = Array.isArray(estimates)
+      ? (estimates as Array<{ estimatedRevenueAvg?: number; date?: string }>)
+      : [];
+    // Sort by date ascending so [0]=nearest year, [1]=following year.
+    estRows.sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
+    if (estRows.length >= 2) {
+      const cur = num(estRows[0].estimatedRevenueAvg);
+      const next = num(estRows[1].estimatedRevenueAvg);
+      if (cur > 0) forwardRevenueGrowth = ((next - cur) / cur) * 100;
+    }
+    const surpRows = Array.isArray(surprises)
+      ? (surprises as Array<{
+          actualEarningResult?: number;
+          estimatedEarning?: number;
+        }>)
+      : [];
+    if (surpRows.length > 0) {
+      earningsSurpriseStreak = surpRows
+        .slice(0, 4)
+        .filter(
+          (r) => num(r.actualEarningResult) > num(r.estimatedEarning)
+        ).length;
+    }
+  }
+
   return {
     symbol,
     name: quoteRow.name ?? symbol,
-    sector: SECTOR_BY_SYMBOL.get(symbol) ?? "—",
+    sector: opts.sector ?? SECTOR_BY_SYMBOL.get(symbol) ?? "—",
     price,
     marketCap: num(quoteRow.marketCap),
     revenueGrowthYoY: num(growthRow.growthRevenue) * 100,
@@ -177,23 +218,68 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
     analystHold,
     analystSell,
     priceTargetUpside,
+    forwardRevenueGrowth,
+    earningsSurpriseStreak,
     peRatio: quoteRow.pe ?? null,
     psRatio: num(ratiosRow.priceToSalesRatioTTM),
   };
 }
 
+interface ScreenerRow {
+  symbol: string;
+  sector?: string;
+  marketCap?: number;
+}
+
+/**
+ * Full-market universe via the stock screener (1 call). Tilts to small/mid-cap,
+ * actively-traded, non-ETF names — the hunting ground for future breakouts.
+ */
+async function fetchScreenerUniverse(
+  key: string,
+  max: number
+): Promise<{ symbol: string; sector: string }[]> {
+  const params = [
+    "marketCapMoreThan=500000000",
+    "marketCapLowerThan=30000000000",
+    "volumeMoreThan=300000",
+    "isActivelyTrading=true",
+    "isEtf=false",
+    "isFund=false",
+    `limit=${Math.min(max * 4, 200)}`,
+    key,
+  ].join("&");
+  const rows =
+    (await tryJson<ScreenerRow[]>(`${BASE}/company-screener?${params}`)) ?? [];
+  return rows
+    .filter((r) => r.symbol && (r.marketCap ?? 0) > 0)
+    .sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0)) // larger (more liquid) first within the small/mid band
+    .slice(0, max)
+    .map((r) => ({ symbol: r.symbol, sector: r.sector ?? "—" }));
+}
+
 export async function fetchFmpStocks(apiKey: string): Promise<Stock[]> {
   const key = `apikey=${apiKey}`;
+  const useScreener = (process.env.FMP_UNIVERSE ?? "watchlist") === "screener";
+  const forward = (process.env.FMP_FORWARD ?? "false") === "true";
+  const maxSymbols = Math.max(
+    5,
+    Math.min(40, Number(process.env.FMP_MAX_SYMBOLS ?? (forward ? 15 : 20)))
+  );
 
-  // Probe one symbol first so a bad key / wrong plan surfaces a clear error
-  // (instead of silently returning an empty list).
+  // Probe one symbol first so a bad key / wrong plan / rate limit surfaces a
+  // clear error (instead of silently returning an empty list).
   const probe = await fetchJson<unknown>(`${BASE}/quote?symbol=NVDA&${key}`);
   if (!firstOf<FmpQuote>(probe)) {
     throw new Error("FMP returned no quote data (check key/plan)");
   }
 
+  const universe = useScreener
+    ? await fetchScreenerUniverse(key, maxSymbols)
+    : WATCHLIST.slice(0, maxSymbols);
+
   const results = await Promise.all(
-    WATCHLIST.map((w) => fetchOne(w.symbol, key))
+    universe.map((u) => fetchOne(u.symbol, key, { sector: u.sector, forward }))
   );
   return results.filter(
     (s): s is Stock => s !== null && s.price > 0 && s.marketCap > 0

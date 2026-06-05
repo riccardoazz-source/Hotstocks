@@ -39,6 +39,17 @@ export interface Stock {
   /** Average analyst price-target upside vs current price, in percent. */
   priceTargetUpside: number;
 
+  // --- Forward-looking signals (the real leading indicators) ---
+  /** Next fiscal year consensus revenue growth, in percent. */
+  forwardRevenueGrowth?: number;
+  /**
+   * Direction analysts are revising forward estimates: +1 raising, 0 flat,
+   * -1 cutting. Rising estimates often precede a re-rating.
+   */
+  estimateRevisionTrend?: number;
+  /** How many of the last 4 quarters beat EPS expectations (0-4). */
+  earningsSurpriseStreak?: number;
+
   // --- Valuation ---
   /** Price/Earnings ratio. null when not profitable. */
   peRatio: number | null;
@@ -52,11 +63,14 @@ export interface Stock {
 export type FactorKey =
   | "roomToRun"
   | "growth"
+  | "forwardOutlook"
   | "acceleration"
   | "valuation"
   | "underRadar"
-  | "momentum"
   | "quality";
+
+/** Tunable factor weights (sum should be 1). Calibrated by the backtest. */
+export type Weights = Record<FactorKey, number>;
 
 /** A single named contributor to the overall Breakout score. */
 export interface FactorBreakdown {
