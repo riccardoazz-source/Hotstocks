@@ -62,10 +62,14 @@ works with zero setup.
 
 3. Restart `npm run dev`.
 
-The adapter (`lib/data/fmp.ts`) fetches a curated watchlist and degrades
+The adapter (`lib/data/fmp.ts`) uses FMP's current **`/stable/`** API (the
+legacy `/api/v3/` and `/api/v4/` routes were retired after 2025-08-31 and now
+return `403` for newer keys). It fetches a curated watchlist and degrades
 gracefully: if an endpoint isn't on your plan, that field falls back to a
-neutral default and scoring still works. Results are cached for 30 minutes to
-stay within free-tier limits. Edit the `WATCHLIST` array to change the universe.
+neutral default and scoring still works. Results are cached for 6 hours to stay
+within the free tier's ~250 requests/day budget. Edit the `WATCHLIST` array in
+`lib/data/fmp.ts` to change the universe (each entry carries a display sector so
+no extra API call is needed just for that).
 
 ## Deploy to Vercel
 
