@@ -119,15 +119,45 @@ lib/
   data/
     provider.ts         # Chooses mock vs fmp via DATA_PROVIDER
     mockStocks.ts       # Demo dataset
-    fmp.ts              # Financial Modeling Prep adapter
+    fmp.ts              # Financial Modeling Prep adapter (watchlist or screener)
+  backtest/
+    engine.ts           # Spearman + quintile spread + weight calibration
+    synthetic.ts        # Offline demonstration dataset
+    types.ts
+scripts/
+  backtest.mts          # `npm run backtest`
 ```
+
+## Backtest & weight calibration
+
+Weights are opinions until validated. The backtest checks whether a higher
+Breakout score actually precedes higher forward returns, and calibrates the
+factor weights on the data:
+
+```bash
+npm run backtest
+```
+
+It reports the **Spearman rank correlation** (does score track forward return?)
+and the **top-vs-bottom quintile spread** (does the ranking pay?), calibrating
+weights on a TRAIN split and reporting them on a held-out TEST split so the
+numbers aren't in-sample overfitting. Suggested weights are written to
+`backtest-results.json`; adopt them by pasting into `DEFAULT_WEIGHTS` in
+`lib/scoring.ts`.
+
+> **Honest caveat:** out of the box this runs on a **synthetic** dataset — it
+> proves the *machinery* (and recovers the hidden signal), not the real-world
+> model. Rigorous validation needs **point-in-time** historical fundamentals
+> (to avoid look-ahead and survivorship bias), which the FMP free tier doesn't
+> fully provide. The harness is built to accept a real dataset
+> (`BACKTEST_SOURCE`); wiring a paid point-in-time source is the remaining step.
 
 ## Roadmap ideas
 
-- **Live universe via FMP screener** — replace the curated watchlist with a
-  dynamic small/mid-cap screen so candidates aren't hand-picked (biggest win).
-- **Backtest** the score against historical returns to calibrate the weights.
+- **Wire real point-in-time data into the backtest** — the one thing standing
+  between "reasonable heuristic" and "validated model".
 - Add news/catalyst feed and earnings-date proximity to the timeframe model.
 - Quarterly (not just annual) acceleration and free-cash-flow inflection signals.
+- Walk-forward (rolling) calibration and regularization to resist overfitting.
 - Watchlists, alerts, and per-user portfolios.
 - Optional AI-written narratives (Claude) on top of the rule-based reasons.
