@@ -19,29 +19,42 @@ const CACHE_SECONDS = 60 * 60 * 6; // 6h: keeps daily request count low
 
 /**
  * Curated universe to score, with a display sector so we don't spend an API
- * call per name just to fetch the sector. Edit freely.
+ * call per name just to fetch the sector.
+ *
+ * It is deliberately tilted toward small/mid-cap, under-covered growth names
+ * across many themes (where future breakouts actually come from), with a few
+ * mega-caps kept as a "control" — the forward-looking model should rank those
+ * LOW. Edit freely; a live screener is the natural next step (see README).
  */
 const WATCHLIST: { symbol: string; sector: string }[] = [
-  { symbol: "NVDA", sector: "Semiconductors" },
-  { symbol: "MU", sector: "Semiconductors" },
+  // Small / mid-cap growth candidates (the real hunting ground)
   { symbol: "SNDK", sector: "Semiconductors" },
-  { symbol: "AVGO", sector: "Semiconductors" },
-  { symbol: "MRVL", sector: "Semiconductors" },
-  { symbol: "AMD", sector: "Semiconductors" },
-  { symbol: "ARM", sector: "Semiconductors" },
-  { symbol: "TSM", sector: "Semiconductors" },
-  { symbol: "ALAB", sector: "Semiconductors" },
   { symbol: "CRDO", sector: "Semiconductors" },
-  { symbol: "VRT", sector: "Datacenter Infrastructure" },
-  { symbol: "SMCI", sector: "Datacenter Hardware" },
-  { symbol: "DELL", sector: "Datacenter Hardware" },
-  { symbol: "ANET", sector: "Networking" },
+  { symbol: "ALAB", sector: "Semiconductors" },
+  { symbol: "ONTO", sector: "Semiconductor Equipment" },
   { symbol: "CLS", sector: "Electronics Manufacturing" },
-  { symbol: "PLTR", sector: "Software" },
-  { symbol: "NET", sector: "Software" },
-  { symbol: "DUOL", sector: "Software" },
-  { symbol: "RKLB", sector: "Aerospace" },
+  { symbol: "VRT", sector: "Datacenter Infrastructure" },
   { symbol: "NBIS", sector: "Cloud Infrastructure" },
+  { symbol: "RKLB", sector: "Aerospace" },
+  { symbol: "RXRX", sector: "Biotech / AI" },
+  { symbol: "TMDX", sector: "Medical Devices" },
+  { symbol: "HIMS", sector: "Health Tech" },
+  { symbol: "AS", sector: "Consumer Brands" },
+  { symbol: "CAVA", sector: "Restaurants" },
+  { symbol: "DUOL", sector: "Software" },
+  { symbol: "IOT", sector: "Software" },
+  { symbol: "NET", sector: "Software" },
+  { symbol: "TOST", sector: "Fintech" },
+  { symbol: "AFRM", sector: "Fintech" },
+  { symbol: "NXT", sector: "Clean Energy" },
+  { symbol: "FLNC", sector: "Clean Energy" },
+  { symbol: "POWL", sector: "Industrials" },
+  { symbol: "SMCI", sector: "Datacenter Hardware" },
+  // Mega-cap "control" group — should rank low under the model
+  { symbol: "NVDA", sector: "Semiconductors" },
+  { symbol: "AMD", sector: "Semiconductors" },
+  { symbol: "TSM", sector: "Semiconductors" },
+  { symbol: "PLTR", sector: "Software" },
 ];
 
 const SECTOR_BY_SYMBOL = new Map(WATCHLIST.map((w) => [w.symbol, w.sector]));
@@ -99,7 +112,8 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
     tryJson<unknown>(`${BASE}/quote?${q}`),
     tryJson<unknown>(`${BASE}/stock-price-change?${q}`),
     tryJson<unknown>(`${BASE}/ratios-ttm?${q}`),
-    tryJson<unknown>(`${BASE}/income-statement-growth?${q}&limit=1`),
+    // limit=2 so we can compute growth ACCELERATION (this year vs last year)
+    tryJson<unknown>(`${BASE}/income-statement-growth?${q}&limit=2`),
     tryJson<unknown>(`${BASE}/price-target-consensus?${q}`),
     tryJson<unknown>(`${BASE}/grades-consensus?${q}`),
   ]);
@@ -112,8 +126,16 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
     firstOf<{ grossProfitMarginTTM?: number; priceToSalesRatioTTM?: number }>(
       ratios
     ) ?? {};
-  const growthRow =
-    firstOf<{ growthRevenue?: number; growthNetIncome?: number }>(growth) ?? {};
+  const growthRows = Array.isArray(growth)
+    ? (growth as Array<{ growthRevenue?: number; growthNetIncome?: number }>)
+    : [];
+  const growthRow = growthRows[0] ?? {};
+  // Acceleration in percentage points: latest YoY growth minus prior year's.
+  const revenueAcceleration =
+    growthRows.length >= 2
+      ? (num(growthRows[0].growthRevenue) - num(growthRows[1].growthRevenue)) *
+        100
+      : 0;
   const targetRow = firstOf<{ targetConsensus?: number }>(target);
   const gradesRow = firstOf<{
     strongBuy?: number;
@@ -154,6 +176,7 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
     marketCap: num(quoteRow.marketCap),
     revenueGrowthYoY: num(growthRow.growthRevenue) * 100,
     earningsGrowthYoY: num(growthRow.growthNetIncome) * 100,
+    revenueAcceleration,
     grossMargin: num(ratiosRow.grossProfitMarginTTM) * 100,
     priceChange3M: change3M,
     priceChange1Y: change1Y,

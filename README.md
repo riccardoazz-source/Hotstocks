@@ -1,43 +1,47 @@
 # 🔥 Hotstocks
 
-A quantitative stock screener that ranks high-potential "hot" stocks, explains
-**why** each one stands out, and estimates roughly **when** a re-rating could
-play out. Built with Next.js and designed to deploy on Vercel in one click.
+A quantitative stock screener that surfaces the stocks with the most room to
+*become* the next breakout — one ranked list, each name with the reasons **why**
+and a model estimate of **when** a re-rating could play out. Built with Next.js
+and designed to deploy on Vercel in one click.
 
-> **Not financial advice.** Hotstocks is an educational tool. Its scores and
-> timeframes are model estimates derived from public fundamentals, price
-> momentum, analyst sentiment and valuation — not predictions or guarantees.
+> **Not financial advice.** Hotstocks is an educational tool. Its scores,
+> timeframes and theses are model estimates derived from public fundamentals,
+> valuation, growth and price data — not predictions or guarantees.
 
 ## What it does
 
-Three views over the same scored universe:
+A single **Breakout Score** ranking. For every stock it shows the headline
+score, a one-line thesis, an estimated re-rating window (`0–3` / `3–9` /
+`9–24 months`) with a confidence meter, the top reasons it ranks where it does,
+the full factor breakdown, and the main caveat/risk. Filter by market-cap band
+or sector; search by symbol/name.
 
-1. **🔎 Discovery — "Find the next Nvidia"**
-   Surfaces early-stage names (high revenue growth + room to scale) before they
-   become mega-caps. Ranked by a dedicated `nextGenScore`.
-2. **⏱ Rank · When**
-   Orders the best hotstocks by how soon a re-rating could realistically
-   happen (`0–3`, `3–9`, `9–24 months`), each with a confidence meter.
-3. **💡 Rank · Why**
-   Orders by overall **Hotness** and shows the top reasons plus a full factor
-   breakdown.
+## How the scoring works — the method
 
-## How the scoring works
+The score is **forward-looking by design**: it rewards what tends to *precede* a
+re-rating, not what already happened. A naive screener ranks the names that
+already ran (mega-caps, parabolic momentum); this one deliberately does the
+opposite. See `lib/scoring.ts`.
 
-Each stock gets a 0–100 **Hotness** score, a weighted blend of five factors
-(see `lib/scoring.ts`):
-
-| Factor | Weight | Signal |
+| Factor | Weight | What it rewards |
 | --- | --- | --- |
-| Growth | 30% | Revenue & earnings growth (YoY) |
-| Momentum | 25% | 3-month / 1-year price change, RSI |
-| Analyst sentiment | 20% | Buy ratio + price-target upside |
-| Early-stage upside | 15% | Smaller cap = more room to multiply |
-| Valuation discipline | 10% | Valuation relative to growth |
+| **Room to run** | 26% | Small/mid caps that can still multiply; mega-caps penalized (a $3T name can't 10x) |
+| **Revenue growth** | 20% | High revenue (and earnings) growth |
+| **Growth acceleration** | 12% | Growth that is *speeding up* year over year — a leading indicator |
+| **Valuation vs growth** | 16% | Growth not yet priced to perfection (PEG-like) |
+| **Under the radar** | 12% | Lightly-covered names with upside; crowded consensus (40+ analysts) penalized |
+| **Momentum stage** | 10% | A healthy *early* uptrend; parabolic +200% runs flagged as "you're late", crashes penalized |
+| **Margin quality** | 4% | Scalable gross margins |
 
-`timeframe` is derived from momentum + analyst urgency; `confidence` from
-analyst coverage, agreement and how consistent the signals are. All weights and
-thresholds live in `lib/scoring.ts` — tune them freely.
+`timeframe` is derived from acceleration + momentum stage + analyst upside;
+`confidence` from analyst coverage and how consistent the signals are. All
+weights and thresholds live in `lib/scoring.ts` — tune them freely.
+
+> **Why this matters:** under this model the famous mega-caps (NVDA, AMD, TSM…)
+> rank near the *bottom* — they're great companies that have largely already
+> re-rated. The top of the list is small/mid-cap, under-covered, accelerating
+> growth — i.e. the profile of a *future* breakout, not a past one.
 
 ## Run locally
 
@@ -92,8 +96,9 @@ app/
   globals.css
   api/stocks/route.ts   # JSON API of scored stocks
 components/
-  Dashboard.tsx         # Tabs, search, ranking logic (client)
-  StockCard.tsx
+  Dashboard.tsx         # Single ranking, filters, method explainer (client)
+  StockCard.tsx         # Per-stock card with thesis, window, breakdown
+  ScoreRing.tsx         # Circular Breakout-score gauge
   ScoreBar.tsx
 lib/
   types.ts              # Domain types
@@ -107,7 +112,10 @@ lib/
 
 ## Roadmap ideas
 
+- **Live universe via FMP screener** — replace the curated watchlist with a
+  dynamic small/mid-cap screen so candidates aren't hand-picked (biggest win).
+- **Backtest** the score against historical returns to calibrate the weights.
 - Add news/catalyst feed and earnings-date proximity to the timeframe model.
-- Backtest the score against historical returns to calibrate weights.
+- Quarterly (not just annual) acceleration and free-cash-flow inflection signals.
 - Watchlists, alerts, and per-user portfolios.
 - Optional AI-written narratives (Claude) on top of the rule-based reasons.

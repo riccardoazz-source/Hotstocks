@@ -4,33 +4,27 @@ import { useMemo, useState } from "react";
 import type { ScoredStock } from "@/lib/types";
 import { StockCard } from "./StockCard";
 
-type Tab = "discovery" | "when" | "why";
+type CapBand = "all" | "under10" | "10to50" | "mega";
 
-const TABS: { id: Tab; label: string; blurb: string }[] = [
-  {
-    id: "discovery",
-    label: "🔎 Discovery",
-    blurb:
-      "Find the next Nvidia: early-stage names with high growth and room to scale.",
-  },
-  {
-    id: "when",
-    label: "⏱ Rank · When",
-    blurb:
-      "Best hotstocks ordered by how soon a re-rating could realistically play out.",
-  },
-  {
-    id: "why",
-    label: "💡 Rank · Why",
-    blurb: "Best hotstocks ordered by overall conviction, with the reasons why.",
-  },
+const CAP_BANDS: { id: CapBand; label: string }[] = [
+  { id: "all", label: "All sizes" },
+  { id: "under10", label: "< $10B" },
+  { id: "10to50", label: "$10–50B" },
+  { id: "mega", label: "> $200B" },
 ];
 
-const TIMEFRAME_ORDER: Record<string, number> = {
-  "0–3 months": 0,
-  "3–9 months": 1,
-  "9–24 months": 2,
-};
+function inBand(cap: number, band: CapBand): boolean {
+  switch (band) {
+    case "under10":
+      return cap < 1e10;
+    case "10to50":
+      return cap >= 1e10 && cap < 5e10;
+    case "mega":
+      return cap >= 2e11;
+    default:
+      return true;
+  }
+}
 
 export function Dashboard({
   stocks,
@@ -43,58 +37,45 @@ export function Dashboard({
   notice?: string;
   generatedAt: string;
 }) {
-  const [tab, setTab] = useState<Tab>("why");
   const [query, setQuery] = useState("");
+  const [band, setBand] = useState<CapBand>("all");
+  const [showMethod, setShowMethod] = useState(false);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return stocks;
-    return stocks.filter(
-      (s) =>
-        s.symbol.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q) ||
-        s.sector.toLowerCase().includes(q)
-    );
-  }, [stocks, query]);
+  const sectors = useMemo(
+    () => Array.from(new Set(stocks.map((s) => s.sector))).sort(),
+    [stocks]
+  );
+  const [sector, setSector] = useState<string>("all");
 
   const ranked = useMemo(() => {
-    const list = [...filtered];
-    if (tab === "discovery") {
-      // Early-stage upside first; mega-caps drop down the list.
-      return list
-        .filter((s) => s.marketCap < 5e11)
-        .sort((a, b) => b.nextGenScore - a.nextGenScore);
-    }
-    if (tab === "when") {
-      return list.sort((a, b) => {
-        const t = TIMEFRAME_ORDER[a.timeframe] - TIMEFRAME_ORDER[b.timeframe];
-        if (t !== 0) return t;
-        // within the same window, hotter + more confident first
-        return (
-          b.hotness * (b.confidence / 100) - a.hotness * (a.confidence / 100)
-        );
-      });
-    }
-    return list.sort((a, b) => b.hotness - a.hotness);
-  }, [filtered, tab]);
-
-  const active = TABS.find((t) => t.id === tab)!;
-  const primaryMetric = tab === "discovery" ? "nextGenScore" : "hotness";
+    const q = query.trim().toLowerCase();
+    return stocks
+      .filter((s) => inBand(s.marketCap, band))
+      .filter((s) => sector === "all" || s.sector === sector)
+      .filter(
+        (s) =>
+          !q ||
+          s.symbol.toLowerCase().includes(q) ||
+          s.name.toLowerCase().includes(q) ||
+          s.sector.toLowerCase().includes(q)
+      );
+  }, [stocks, query, band, sector]);
 
   return (
-    <main className="mx-auto max-w-3xl px-4 pb-24 pt-10 sm:pt-16">
+    <main className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:pt-14">
       <header className="mb-8">
         <div className="flex items-center gap-2">
           <span className="text-3xl">🔥</span>
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <h1 className="bg-gradient-to-r from-orange-400 to-amber-200 bg-clip-text text-3xl font-extrabold tracking-tight text-transparent sm:text-4xl">
             Hotstocks
           </h1>
         </div>
         <p className="mt-2 max-w-xl text-white/60">
-          A quantitative screener that ranks high-potential stocks, explains{" "}
-          <em>why</em>, and estimates roughly <em>when</em> a re-rating could
-          play out.
+          One ranked list of stocks with the most room to{" "}
+          <em>become</em> the next breakout — each with the reasons why and a
+          model estimate of when it could re-rate.
         </p>
+
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <span
             className={`rounded-full border px-2.5 py-1 ${
@@ -108,7 +89,50 @@ export function Dashboard({
           <span className="text-white/30">
             Updated {new Date(generatedAt).toLocaleString()}
           </span>
+          <button
+            onClick={() => setShowMethod((m) => !m)}
+            className="rounded-full border border-white/10 px-2.5 py-1 text-white/50 transition hover:border-white/30 hover:text-white"
+          >
+            {showMethod ? "Hide method ▲" : "How the ranking works ▼"}
+          </button>
         </div>
+
+        {showMethod && (
+          <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/65">
+            <p>
+              The <strong>Breakout Score</strong> is forward-looking: it rewards
+              what tends to precede a re-rating, not what already happened.
+            </p>
+            <ul className="ml-4 list-disc space-y-1 text-white/55">
+              <li>
+                <strong>Room to run (26%)</strong> — small/mid caps can multiply;
+                mega-caps are penalized (a $3T name can&apos;t 10x).
+              </li>
+              <li>
+                <strong>Revenue growth (20%)</strong> &amp;{" "}
+                <strong>acceleration (12%)</strong> — high and{" "}
+                <em>speeding-up</em> growth.
+              </li>
+              <li>
+                <strong>Valuation vs growth (16%)</strong> — growth not yet
+                priced to perfection.
+              </li>
+              <li>
+                <strong>Under the radar (12%)</strong> — lightly-covered gems;
+                crowded consensus names are penalized.
+              </li>
+              <li>
+                <strong>Momentum stage (10%)</strong> — a healthy early uptrend
+                scores best; parabolic moves are flagged as &quot;you&apos;re
+                late&quot;.
+              </li>
+              <li>
+                <strong>Margin quality (4%)</strong>.
+              </li>
+            </ul>
+          </div>
+        )}
+
         {notice && (
           <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80">
             {notice}
@@ -116,52 +140,59 @@ export function Dashboard({
         )}
       </header>
 
-      <nav className="sticky top-2 z-10 mb-4 flex gap-1 rounded-2xl border border-white/10 bg-black/40 p-1 backdrop-blur">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition ${
-              tab === t.id
-                ? "bg-brand text-black"
-                : "text-white/60 hover:text-white"
-            }`}
+      <div className="mb-6 space-y-3">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search symbol, name or sector…"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm outline-none placeholder:text-white/30 focus:border-brand/50"
+        />
+        <div className="flex flex-wrap gap-2">
+          {CAP_BANDS.map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setBand(b.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                band === b.id
+                  ? "bg-brand text-black"
+                  : "border border-white/10 text-white/60 hover:text-white"
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+          <select
+            value={sector}
+            onChange={(e) => setSector(e.target.value)}
+            className="ml-auto rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-white/70 outline-none focus:border-brand/50"
           >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
-      <p className="mb-4 text-sm text-white/50">{active.blurb}</p>
-
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search symbol, name or sector…"
-        className="mb-6 w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm outline-none placeholder:text-white/30 focus:border-brand/50"
-      />
+            <option value="all">All sectors</option>
+            {sectors.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <div className="space-y-4">
         {ranked.map((stock, i) => (
-          <StockCard
-            key={stock.symbol}
-            stock={stock}
-            rank={i + 1}
-            primaryMetric={primaryMetric}
-          />
+          <StockCard key={stock.symbol} stock={stock} rank={i + 1} />
         ))}
         {ranked.length === 0 && (
           <p className="py-12 text-center text-white/40">
-            No matches. Try another search.
+            No matches for these filters.
           </p>
         )}
       </div>
 
       <footer className="mt-12 border-t border-white/10 pt-6 text-xs leading-relaxed text-white/40">
         <strong className="text-white/60">Not financial advice.</strong>{" "}
-        Hotstocks is an educational, quantitative screener. Scores and timeframes
-        are model estimates derived from growth, momentum, analyst sentiment and
-        valuation — not predictions or guarantees. Always do your own research.
+        Hotstocks is an educational, quantitative screener. Scores, timeframes
+        and theses are model estimates derived from public fundamentals,
+        valuation, growth and price data — not predictions or guarantees.
+        Markets are uncertain; always do your own research.
       </footer>
     </main>
   );

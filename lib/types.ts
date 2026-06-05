@@ -14,6 +14,11 @@ export interface Stock {
   revenueGrowthYoY: number;
   /** Year-over-year earnings growth, in percent. */
   earningsGrowthYoY: number;
+  /**
+   * Change in the annual revenue-growth rate vs the prior year, in percentage
+   * points. Positive => growth is accelerating (a key leading indicator).
+   */
+  revenueAcceleration: number;
   /** Gross margin, in percent. */
   grossMargin: number;
 
@@ -25,7 +30,7 @@ export interface Stock {
   /** Relative Strength Index (0-100). */
   rsi: number;
 
-  // --- Analyst sentiment ---
+  // --- Analyst sentiment / coverage ---
   analystBuy: number;
   analystHold: number;
   analystSell: number;
@@ -42,15 +47,24 @@ export interface Stock {
   catalysts?: string[];
 }
 
-/** A single named contributor to the overall Hotness score. */
+export type FactorKey =
+  | "roomToRun"
+  | "growth"
+  | "acceleration"
+  | "valuation"
+  | "underRadar"
+  | "momentum"
+  | "quality";
+
+/** A single named contributor to the overall Breakout score. */
 export interface FactorBreakdown {
-  key: "growth" | "momentum" | "analyst" | "earlyStage" | "valuation";
+  key: FactorKey;
   label: string;
   /** Normalized sub-score 0-100. */
   score: number;
   /** Weight applied to this factor in the final score (0-1). */
   weight: number;
-  /** Human-readable reason string for the "Why" view. */
+  /** Human-readable explanation for this factor. */
   reason: string;
 }
 
@@ -58,15 +72,20 @@ export type Timeframe = "0–3 months" | "3–9 months" | "9–24 months";
 
 /** A stock enriched with computed scores and explanations. */
 export interface ScoredStock extends Stock {
-  /** Overall 0-100 hotness score. */
-  hotness: number;
-  /** "Next Nvidia" potential: rewards early-stage + high growth. 0-100. */
-  nextGenScore: number;
+  /**
+   * Overall 0-100 forward-looking score: how much room + reason this name has
+   * to *become* a breakout from here (not how much it already ran).
+   */
+  breakoutScore: number;
   /** Estimated window in which a re-rating could play out. */
   timeframe: Timeframe;
   /** Confidence in the timeframe/thesis, 0-100. */
   confidence: number;
   factors: FactorBreakdown[];
-  /** Top 3 reason strings, ordered by contribution. */
+  /** One-line investment thesis. */
+  thesis: string;
+  /** Top reason strings, ordered by contribution. */
   topReasons: string[];
+  /** Short cautionary note (the main risk/caveat for this name). */
+  caveat: string;
 }
