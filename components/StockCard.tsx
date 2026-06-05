@@ -12,6 +12,14 @@ const TIMEFRAME_STYLES: Record<string, string> = {
   "9–24 months": "bg-sky-500/15 text-sky-300 border-sky-500/30",
 };
 
+const STAGE_STYLES: Record<string, string> = {
+  "Pre-breakout": "bg-violet-500/15 text-violet-300 border-violet-500/30",
+  "Early uptrend": "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  "Mid-trend": "bg-lime-500/15 text-lime-300 border-lime-500/30",
+  Extended: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  "Late · already ran": "bg-rose-500/20 text-rose-300 border-rose-500/40",
+};
+
 export function StockCard({
   stock,
   rank,
@@ -40,7 +48,15 @@ export function StockCard({
               </span>
             </div>
 
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/45">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-white/45">
+              <span
+                className={`rounded-full border px-2 py-0.5 font-medium ${
+                  STAGE_STYLES[stock.stage]
+                }`}
+                title="Where the stock is in its move"
+              >
+                {stock.stage}
+              </span>
               <span className="rounded-full border border-white/10 px-2 py-0.5">
                 {stock.sector}
               </span>
@@ -48,12 +64,10 @@ export function StockCard({
               <span>{fmtMarketCap(stock.marketCap)}</span>
               <span
                 className={
-                  stock.priceChange1Y >= 0
-                    ? "text-emerald-400/80"
-                    : "text-rose-400/80"
+                  stock.runUp >= 0 ? "text-emerald-400/80" : "text-rose-400/80"
                 }
               >
-                {fmtPct(stock.priceChange1Y)} 1Y
+                {fmtPct(stock.runUp)} run-up
               </span>
             </div>
 
@@ -132,6 +146,17 @@ export function StockCard({
               ))}
             </div>
           </div>
+
+          {stock.latenessMultiplier < 0.99 && (
+            <div className="mb-3 flex items-center justify-between rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs text-rose-200/80">
+              <span>
+                Late-stage discount (already up {stock.runUp.toFixed(0)}%)
+              </span>
+              <span className="font-semibold tabular-nums">
+                −{Math.round((1 - stock.latenessMultiplier) * 100)}% to score
+              </span>
+            </div>
+          )}
 
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/80">
             ⚠ {stock.caveat}

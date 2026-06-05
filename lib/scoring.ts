@@ -4,6 +4,7 @@ import type {
   FactorBreakdown,
   FactorKey,
   Timeframe,
+  Stage,
 } from "./types";
 
 /**
@@ -232,7 +233,12 @@ function buildThesis(s: Stock, factors: FactorBreakdown[]): string {
 }
 
 function buildCaveat(s: Stock): string {
-  if (s.priceChange1Y > 150)
+  const runUp = runUpOf(s);
+  if (runUp > 250)
+    return `Already up ~${Math.round(
+      runUp
+    )}% — most of the re-rating has likely happened; chasing it is risky.`;
+  if (runUp > 120)
     return "Already up sharply — entry timing and pullback risk matter.";
   if (s.marketCap > 2e11)
     return "Mega-cap: a true multi-bagger from here is mathematically unlikely.";
@@ -245,14 +251,43 @@ function buildCaveat(s: Stock): string {
   return "Smaller, higher-volatility name — size positions accordingly.";
 }
 
+/** The trailing run-up we judge "lateness" on: the larger of 1Y and YTD. */
+function runUpOf(s: Stock): number {
+  return Math.max(s.priceChange1Y, s.priceChangeYTD ?? s.priceChange1Y);
+}
+
+/**
+ * "You're late" discount. The more a stock has ALREADY run, the more its
+ * forward score is cut — because most of the re-rating has likely happened.
+ * This is the core of the app's purpose: find names BEFORE the move.
+ */
+function latenessMultiplier(runUp: number): number {
+  if (runUp <= 50) return 1.0;
+  if (runUp <= 120) return 1.0 - ((runUp - 50) / 70) * 0.15; // -> 0.85
+  if (runUp <= 250) return 0.85 - ((runUp - 120) / 130) * 0.23; // -> 0.62
+  if (runUp <= 450) return 0.62 - ((runUp - 250) / 200) * 0.17; // -> 0.45
+  return 0.4; // very extended: the boom likely already happened
+}
+
+function stageOf(runUp: number): Stage {
+  if (runUp < 0) return "Pre-breakout";
+  if (runUp <= 50) return "Early uptrend";
+  if (runUp <= 120) return "Mid-trend";
+  if (runUp <= 250) return "Extended";
+  return "Late · already ran";
+}
+
 /** Score a single stock. */
 export function scoreStock(s: Stock): ScoredStock {
   const { factors, total } = buildFactors(s);
   const byKey = Object.fromEntries(factors.map((f) => [f.key, f]));
 
-  const breakoutScore = r1(
-    factors.reduce((sum, f) => sum + f.score * f.weight, 0)
-  );
+  const rawScore = factors.reduce((sum, f) => sum + f.score * f.weight, 0);
+
+  const runUp = runUpOf(s);
+  const lateness = latenessMultiplier(runUp);
+  const stage = stageOf(runUp);
+  const breakoutScore = r1(rawScore * lateness);
 
   const timeframe = estimateTimeframe(
     byKey.acceleration.score,
@@ -269,6 +304,9 @@ export function scoreStock(s: Stock): ScoredStock {
   return {
     ...s,
     breakoutScore,
+    stage,
+    latenessMultiplier: lateness,
+    runUp,
     timeframe,
     confidence,
     factors,

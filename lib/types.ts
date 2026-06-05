@@ -27,6 +27,8 @@ export interface Stock {
   priceChange3M: number;
   /** Price change over the last 12 months, in percent. */
   priceChange1Y: number;
+  /** Year-to-date price change, in percent. Falls back to 1Y when absent. */
+  priceChangeYTD?: number;
   /** Relative Strength Index (0-100). */
   rsi: number;
 
@@ -70,6 +72,17 @@ export interface FactorBreakdown {
 
 export type Timeframe = "0–3 months" | "3–9 months" | "9–24 months";
 
+/**
+ * Where a stock is in its move. The whole app is about finding names BEFORE the
+ * run, so this is surfaced prominently and heavily discounts late-stage names.
+ */
+export type Stage =
+  | "Pre-breakout"
+  | "Early uptrend"
+  | "Mid-trend"
+  | "Extended"
+  | "Late · already ran";
+
 /** A stock enriched with computed scores and explanations. */
 export interface ScoredStock extends Stock {
   /**
@@ -77,6 +90,15 @@ export interface ScoredStock extends Stock {
    * to *become* a breakout from here (not how much it already ran).
    */
   breakoutScore: number;
+  /** How far into its move it already is. */
+  stage: Stage;
+  /**
+   * Multiplier (0-1) applied to the raw score because the stock already ran.
+   * 1 = no discount; 0.4 = a 60% "you're late" discount.
+   */
+  latenessMultiplier: number;
+  /** The trailing run-up (max of 1Y / YTD) the discount is based on, percent. */
+  runUp: number;
   /** Estimated window in which a re-rating could play out. */
   timeframe: Timeframe;
   /** Confidence in the timeframe/thesis, 0-100. */

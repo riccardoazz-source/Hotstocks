@@ -167,6 +167,7 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
 
   const change3M = num(change["3M"]);
   const change1Y = num(change["1Y"]);
+  const changeYTD = num(change["ytd"]);
 
   return {
     symbol,
@@ -180,6 +181,7 @@ async function fetchOne(symbol: string, key: string): Promise<Stock | null> {
     grossMargin: num(ratiosRow.grossProfitMarginTTM) * 100,
     priceChange3M: change3M,
     priceChange1Y: change1Y,
+    priceChangeYTD: changeYTD,
     rsi: estimateRsi(change3M),
     analystBuy,
     analystHold,

@@ -39,6 +39,7 @@ export function Dashboard({
 }) {
   const [query, setQuery] = useState("");
   const [band, setBand] = useState<CapBand>("all");
+  const [earlyOnly, setEarlyOnly] = useState(false);
   const [showMethod, setShowMethod] = useState(false);
 
   const sectors = useMemo(
@@ -54,12 +55,17 @@ export function Dashboard({
       .filter((s) => sector === "all" || s.sector === sector)
       .filter(
         (s) =>
+          !earlyOnly ||
+          (s.stage !== "Extended" && s.stage !== "Late · already ran")
+      )
+      .filter(
+        (s) =>
           !q ||
           s.symbol.toLowerCase().includes(q) ||
           s.name.toLowerCase().includes(q) ||
           s.sector.toLowerCase().includes(q)
       );
-  }, [stocks, query, band, sector]);
+  }, [stocks, query, band, sector, earlyOnly]);
 
   return (
     <main className="mx-auto max-w-3xl px-4 pb-24 pt-8 sm:pt-14">
@@ -130,6 +136,14 @@ export function Dashboard({
                 <strong>Margin quality (4%)</strong>.
               </li>
             </ul>
+            <p className="border-t border-white/10 pt-2">
+              On top of that, a <strong>late-stage discount</strong> cuts the
+              score of names that have already run hard (e.g. up 300%+): most of
+              the move has likely happened, so they&apos;re no longer{" "}
+              <em>future</em> breakouts. Each card shows a{" "}
+              <strong>Stage</strong> badge — use{" "}
+              <em>🚀 Early-stage only</em> to hide the ones that already ran.
+            </p>
           </div>
         )}
 
@@ -161,6 +175,17 @@ export function Dashboard({
               {b.label}
             </button>
           ))}
+          <button
+            onClick={() => setEarlyOnly((v) => !v)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              earlyOnly
+                ? "bg-emerald-500 text-black"
+                : "border border-white/10 text-white/60 hover:text-white"
+            }`}
+            title="Hide names that have already run (Extended / Late stage)"
+          >
+            🚀 Early-stage only
+          </button>
           <select
             value={sector}
             onChange={(e) => setSector(e.target.value)}
