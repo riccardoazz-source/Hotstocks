@@ -33,7 +33,7 @@ export function Dashboard({
   generatedAt,
 }: {
   stocks: ScoredStock[];
-  source: "mock" | "fmp";
+  source: "mock" | "fmp" | "yahoo";
   notice?: string;
   generatedAt: string;
 }) {
@@ -86,12 +86,16 @@ export function Dashboard({
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <span
             className={`rounded-full border px-2.5 py-1 ${
-              source === "fmp"
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+              source === "mock"
+                ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
             }`}
           >
-            {source === "fmp" ? "● Live data (FMP)" : "● Demo data"}
+            {source === "fmp"
+              ? "● Live data (FMP)"
+              : source === "yahoo"
+              ? "● Live data (Yahoo · free)"
+              : "● Demo data"}
           </span>
           <span className="text-white/30">
             Updated {new Date(generatedAt).toLocaleString()}

@@ -1,4 +1,5 @@
 import type { Stock } from "../types";
+import { CURATED_WATCHLIST } from "./watchlist";
 
 /**
  * Financial Modeling Prep adapter — uses the current "/stable/" API.
@@ -19,35 +20,7 @@ const BASE = "https://financialmodelingprep.com/stable";
 // tier's ~250 requests/day budget (≈ 15 × 5 = 75 calls per refresh, ≤2/day).
 const CACHE_SECONDS = 60 * 60 * 12;
 
-/**
- * Curated universe to score, with a display sector so we don't spend an API
- * call per name just to fetch the sector.
- *
- * It is deliberately tilted toward small/mid-cap, under-covered growth names
- * across many themes (where future breakouts actually come from), with a few
- * mega-caps kept as a "control" — the forward-looking model should rank those
- * LOW. Edit freely; a live screener is the natural next step (see README).
- */
-const WATCHLIST: { symbol: string; sector: string }[] = [
-  // Small / mid-cap growth candidates (the real hunting ground)
-  { symbol: "CRDO", sector: "Semiconductors" },
-  { symbol: "ALAB", sector: "Semiconductors" },
-  { symbol: "ONTO", sector: "Semiconductor Equipment" },
-  { symbol: "NBIS", sector: "Cloud Infrastructure" },
-  { symbol: "RKLB", sector: "Aerospace" },
-  { symbol: "RXRX", sector: "Biotech / AI" },
-  { symbol: "TMDX", sector: "Medical Devices" },
-  { symbol: "HIMS", sector: "Health Tech" },
-  { symbol: "CAVA", sector: "Restaurants" },
-  { symbol: "DUOL", sector: "Software" },
-  { symbol: "TOST", sector: "Fintech" },
-  { symbol: "NXT", sector: "Clean Energy" },
-  { symbol: "POWL", sector: "Industrials" },
-  // Mega-cap "control" group — should rank low under the model
-  { symbol: "NVDA", sector: "Semiconductors" },
-  { symbol: "PLTR", sector: "Software" },
-];
-
+const WATCHLIST = CURATED_WATCHLIST;
 const SECTOR_BY_SYMBOL = new Map(WATCHLIST.map((w) => [w.symbol, w.sector]));
 
 function stripKey(url: string): string {

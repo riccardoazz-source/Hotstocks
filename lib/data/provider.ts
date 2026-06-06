@@ -1,18 +1,43 @@
 import type { Stock } from "../types";
 import { MOCK_STOCKS } from "./mockStocks";
 import { fetchFmpStocks } from "./fmp";
+import { fetchYahooStocks } from "./yahoo";
 
 /**
  * Returns the universe of stocks to score. The provider is selected via the
  * DATA_PROVIDER env var so the app runs with zero setup (mock) and upgrades to
- * live data (fmp) by only changing environment variables.
+ * live data by only changing environment variables:
+ *   - "mock"  (default) — bundled demo data, no setup
+ *   - "yahoo"           — free, no API key (unofficial)
+ *   - "fmp"             — Financial Modeling Prep (needs FMP_API_KEY)
  */
 export async function getStocks(): Promise<{
   stocks: Stock[];
-  source: "mock" | "fmp";
+  source: "mock" | "fmp" | "yahoo";
   notice?: string;
 }> {
   const provider = (process.env.DATA_PROVIDER ?? "mock").toLowerCase();
+
+  if (provider === "yahoo") {
+    try {
+      const stocks = await fetchYahooStocks();
+      if (stocks.length === 0) {
+        return {
+          stocks: MOCK_STOCKS,
+          source: "mock",
+          notice: "Yahoo returned no usable rows — falling back to demo data.",
+        };
+      }
+      return { stocks, source: "yahoo" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error";
+      return {
+        stocks: MOCK_STOCKS,
+        source: "mock",
+        notice: `Yahoo Finance unavailable (${msg}) — showing demo data.`,
+      };
+    }
+  }
 
   if (provider === "fmp") {
     const key = process.env.FMP_API_KEY;
