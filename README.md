@@ -66,26 +66,30 @@ npm run dev
 Out of the box it runs on **bundled demo data** (`lib/data/mockStocks.ts`) so it
 works with zero setup.
 
-## Use real market data (Financial Modeling Prep)
+## Use live market data (free options)
 
-1. Get a free API key at <https://site.financialmodelingprep.com/>.
-2. Create `.env.local`:
+Set `DATA_PROVIDER` in `.env.local` (or in Vercel env vars). You are **not** tied
+to one vendor:
 
-   ```bash
-   DATA_PROVIDER=fmp
-   FMP_API_KEY=your_key_here
-   ```
+| `DATA_PROVIDER` | Key? | Notes |
+| --- | --- | --- |
+| `auto` ⭐ | optional | **Recommended.** Tries Yahoo → Finnhub → demo, for a free + robust app |
+| `yahoo` | no | Free, rich data, no key. Unofficial — can be rate-limited from cloud IPs |
+| `finnhub` | yes (free) | Official & reliable, 60 req/min. Forward estimates are premium |
+| `fmp` | yes (free) | Financial Modeling Prep `/stable/` API; ~250 req/day |
+| `mock` | — | Bundled demo data (default) |
 
-3. Restart `npm run dev`.
+```bash
+# Free + robust (recommended):
+DATA_PROVIDER=auto
+FINNHUB_API_KEY=your_finnhub_key   # optional but enables the reliable fallback
+```
 
-The adapter (`lib/data/fmp.ts`) uses FMP's current **`/stable/`** API (the
-legacy `/api/v3/` and `/api/v4/` routes were retired after 2025-08-31 and now
-return `403` for newer keys). It fetches a curated watchlist and degrades
-gracefully: if an endpoint isn't on your plan, that field falls back to a
-neutral default and scoring still works. Results are cached for 6 hours to stay
-within the free tier's ~250 requests/day budget. Edit the `WATCHLIST` array in
-`lib/data/fmp.ts` to change the universe (each entry carries a display sector so
-no extra API call is needed just for that).
+Get a free Finnhub key at <https://finnhub.io>. Each provider degrades
+gracefully (missing fields fall back to neutral defaults) and the provider layer
+falls back to demo data if a source is unreachable. See `.env.example` for all
+options (per-provider symbol caps, FMP screener/forward toggles). The shared
+universe lives in `lib/data/watchlist.ts`.
 
 ## Deploy to Vercel
 

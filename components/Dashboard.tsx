@@ -33,7 +33,7 @@ export function Dashboard({
   generatedAt,
 }: {
   stocks: ScoredStock[];
-  source: "mock" | "fmp" | "yahoo";
+  source: "mock" | "fmp" | "yahoo" | "finnhub";
   notice?: string;
   generatedAt: string;
 }) {
@@ -95,6 +95,8 @@ export function Dashboard({
               ? "● Live data (FMP)"
               : source === "yahoo"
               ? "● Live data (Yahoo · free)"
+              : source === "finnhub"
+              ? "● Live data (Finnhub · free)"
               : "● Demo data"}
           </span>
           <span className="text-white/30">
